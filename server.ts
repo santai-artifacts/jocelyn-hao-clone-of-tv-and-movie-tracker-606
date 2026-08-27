@@ -2,7 +2,6 @@ import Database from "bun:sqlite";
 import { mkdirSync } from "fs";
 
 // --- Database ---------------------------------------------------------------
-// Persisted under /app/data in production; ./data locally.
 const dbPath = process.env.DATABASE_URL || "./data/app.db";
 try {
   mkdirSync(dbPath.substring(0, dbPath.lastIndexOf("/")), { recursive: true });
@@ -12,7 +11,7 @@ const db = new Database(dbPath);
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec(`
   CREATE TABLE IF NOT EXISTS shows (
-    id         INTEGER PRIMARY KEY,        -- TVMaze show id
+    id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL,
     image      TEXT,
     premiered  TEXT,
@@ -24,7 +23,7 @@ db.exec(`
     added_at   INTEGER NOT NULL
   );
   CREATE TABLE IF NOT EXISTS episodes (
-    id       INTEGER PRIMARY KEY,          -- TVMaze episode id
+    id       INTEGER PRIMARY KEY,
     show_id  INTEGER NOT NULL,
     season   INTEGER NOT NULL,
     number   INTEGER,
@@ -36,6 +35,17 @@ db.exec(`
     FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_ep_show ON episodes(show_id);
+  CREATE TABLE IF NOT EXISTS movies (
+    id       INTEGER PRIMARY KEY,
+    title    TEXT NOT NULL,
+    poster   TEXT,
+    year     TEXT,
+    overview TEXT,
+    genres   TEXT,
+    runtime  INTEGER,
+    watched  INTEGER NOT NULL DEFAULT 0,
+    added_at INTEGER NOT NULL
+  );
 `);
 
 // --- Helpers ----------------------------------------------------------------
@@ -48,14 +58,11 @@ const json = (data: unknown, status = 200) =>
 const stripHtml = (s: string | null | undefined) =>
   (s || "").replace(/<[^>]*>/g, "").trim();
 
-// Compute per-show progress in one query set.
 function showsWithProgress() {
   const shows = db.query("SELECT * FROM shows ORDER BY added_at DESC").all() as any[];
   const progress = db
     .query(
-      `SELECT show_id,
-              COUNT(*) AS total,
-              SUM(watched) AS watched
+      `SELECT show_id, COUNT(*) AS total, SUM(watched) AS watched
        FROM episodes GROUP BY show_id`
     )
     .all() as any[];
@@ -102,16 +109,10 @@ async function importShow(showId: number) {
     `INSERT INTO shows (id, name, image, premiered, ended, status, network, genres, summary, added_at)
      VALUES (?,?,?,?,?,?,?,?,?,?)`
   ).run(
-    show.id,
-    show.name,
-    show.image?.medium || null,
-    show.premiered || null,
-    show.ended || null,
-    show.status || null,
+    show.id, show.name, show.image?.medium || null,
+    show.premiered || null, show.ended || null, show.status || null,
     show.network?.name || show.webChannel?.name || null,
-    JSON.stringify(show.genres || []),
-    stripHtml(show.summary),
-    Date.now()
+    JSON.stringify(show.genres || []), stripHtml(show.summary), Date.now()
   );
 
   const insertEp = db.query(
@@ -120,18 +121,8 @@ async function importShow(showId: number) {
   );
   const tx = db.transaction((list: any[]) => {
     for (const e of list) {
-      // Skip specials with no season number if desired; keep them under season 0.
-      insertEp.run(
-        e.id,
-        show.id,
-        e.season ?? 0,
-        e.number ?? null,
-        e.name || null,
-        e.airdate || null,
-        e.runtime || null,
-        stripHtml(e.summary),
-        e.id
-      );
+      insertEp.run(e.id, show.id, e.season ?? 0, e.number ?? null, e.name || null,
+        e.airdate || null, e.runtime || null, stripHtml(e.summary), e.id);
     }
   });
   tx(eps);
@@ -155,6 +146,54 @@ function showDetail(showId: number) {
   };
 }
 
+// --- TMDB (movies) ----------------------------------------------------------
+const TMDB_KEY = process.env.TMDB_API_KEY;
+
+async function tmdbSearch(q: string) {
+  if (!TMDB_KEY) throw new Error("TMDB_API_KEY secret is not configured");
+  const r = await fetch(
+    `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_KEY}&query=${encodeURIComponent(q)}&language=en-US`
+  );
+  if (!r.ok) throw new Error("TMDB search failed");
+  const data = (await r.json()) as any;
+  return (data.results || []).slice(0, 8).map((m: any) => ({
+    id: m.id,
+    title: m.title,
+    year: m.release_date ? m.release_date.slice(0, 4) : null,
+    poster: m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : null,
+    overview: (m.overview || "").slice(0, 200),
+  }));
+}
+
+async function importMovie(movieId: number) {
+  const existing = db.query("SELECT id FROM movies WHERE id = ?").get(movieId);
+  if (existing) return { alreadyAdded: true };
+  if (!TMDB_KEY) throw new Error("TMDB_API_KEY secret is not configured");
+  const r = await fetch(
+    `https://api.themoviedb.org/3/movie/${movieId}?api_key=${TMDB_KEY}&language=en-US`
+  );
+  if (!r.ok) throw new Error("Movie not found on TMDB");
+  const m = (await r.json()) as any;
+  db.query(
+    `INSERT INTO movies (id, title, poster, year, overview, genres, runtime, watched, added_at)
+     VALUES (?,?,?,?,?,?,?,0,?)`
+  ).run(
+    m.id, m.title,
+    m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : null,
+    m.release_date ? m.release_date.slice(0, 4) : null,
+    (m.overview || "").slice(0, 500),
+    JSON.stringify((m.genres || []).map((g: any) => g.name)),
+    m.runtime || null,
+    Date.now()
+  );
+  return { alreadyAdded: false };
+}
+
+function moviesList() {
+  const movies = db.query("SELECT * FROM movies ORDER BY added_at DESC").all() as any[];
+  return movies.map((m: any) => ({ ...m, genres: m.genres ? JSON.parse(m.genres) : [] }));
+}
+
 // --- Static assets ----------------------------------------------------------
 const publicDir = `${import.meta.dir}/public`;
 async function serveStatic(pathname: string) {
@@ -172,7 +211,7 @@ export default {
     const { pathname } = url;
 
     try {
-      // API
+      // TV Shows API
       if (pathname === "/api/search" && req.method === "GET") {
         const q = url.searchParams.get("q")?.trim();
         if (!q) return json([]);
@@ -186,8 +225,7 @@ export default {
       if (pathname === "/api/shows" && req.method === "POST") {
         const body = (await req.json()) as { id: number };
         if (!body?.id) return json({ error: "id required" }, 400);
-        const result = await importShow(body.id);
-        return json(result);
+        return json(await importShow(body.id));
       }
 
       const showMatch = pathname.match(/^\/api\/shows\/(\d+)$/);
@@ -204,7 +242,6 @@ export default {
         }
       }
 
-      // Toggle a single episode
       const epMatch = pathname.match(/^\/api\/episodes\/(\d+)\/toggle$/);
       if (epMatch && req.method === "POST") {
         const id = Number(epMatch[1]);
@@ -219,25 +256,55 @@ export default {
         return json({ id, watched: !!row?.watched });
       }
 
-      // Bulk toggle a whole season
       const seasonMatch = pathname.match(/^\/api\/shows\/(\d+)\/season\/(\d+)\/toggle$/);
       if (seasonMatch && req.method === "POST") {
         const showId = Number(seasonMatch[1]);
         const season = Number(seasonMatch[2]);
         const body = (await req.json()) as { watched: boolean };
         db.query("UPDATE episodes SET watched = ? WHERE show_id = ? AND season = ?").run(
-          body.watched ? 1 : 0,
-          showId,
-          season
+          body.watched ? 1 : 0, showId, season
         );
         return json({ ok: true });
+      }
+
+      // Movies API
+      if (pathname === "/api/movies/search" && req.method === "GET") {
+        const q = url.searchParams.get("q")?.trim();
+        if (!q) return json([]);
+        return json(await tmdbSearch(q));
+      }
+
+      if (pathname === "/api/movies" && req.method === "GET") {
+        return json(moviesList());
+      }
+
+      if (pathname === "/api/movies" && req.method === "POST") {
+        const body = (await req.json()) as { id: number };
+        if (!body?.id) return json({ error: "id required" }, 400);
+        return json(await importMovie(body.id));
+      }
+
+      const movieMatch = pathname.match(/^\/api\/movies\/(\d+)$/);
+      if (movieMatch) {
+        const id = Number(movieMatch[1]);
+        if (req.method === "DELETE") {
+          db.query("DELETE FROM movies WHERE id = ?").run(id);
+          return json({ ok: true });
+        }
+      }
+
+      const movieToggle = pathname.match(/^\/api\/movies\/(\d+)\/toggle$/);
+      if (movieToggle && req.method === "POST") {
+        const id = Number(movieToggle[1]);
+        db.query("UPDATE movies SET watched = 1 - watched WHERE id = ?").run(id);
+        const row = db.query("SELECT watched FROM movies WHERE id = ?").get(id) as any;
+        return json({ id, watched: !!row?.watched });
       }
 
       // Static
       const stat = await serveStatic(pathname);
       if (stat) return stat;
 
-      // SPA fallback
       const index = await serveStatic("/");
       if (index) return index;
 
