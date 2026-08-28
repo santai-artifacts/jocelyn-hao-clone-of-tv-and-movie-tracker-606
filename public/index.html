@@ -168,31 +168,31 @@
   .lib-sort select:focus { border-color: var(--accent); }
 
   /* Show/Movie grid */
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; margin-top: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 8px; }
   .card {
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
     overflow: hidden; cursor: pointer; transition: transform .18s, border-color .18s, box-shadow .18s;
     display: flex; flex-direction: column;
   }
-  .card:hover { transform: translateY(-4px); border-color: #34406b; box-shadow: var(--shadow); }
+  .card:hover { transform: translateY(-3px); border-color: #34406b; box-shadow: var(--shadow); }
   .poster { aspect-ratio: 2/3; background: var(--bg-2); position: relative; overflow: hidden; }
   .poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .poster .ph { width: 100%; height: 100%; display: grid; place-items: center; color: var(--faint); font-size: 40px; }
+  .poster .ph { width: 100%; height: 100%; display: grid; place-items: center; color: var(--faint); font-size: 32px; }
   .badge {
-    position: absolute; top: 10px; right: 10px; z-index: 2; padding: 5px 10px; border-radius: 3px;
-    font-size: 11.5px; font-weight: 600; backdrop-filter: blur(6px);
+    position: absolute; top: 7px; right: 7px; z-index: 2; padding: 3px 7px; border-radius: 3px;
+    font-size: 10px; font-weight: 600; backdrop-filter: blur(6px);
     background: rgba(255,255,255,.88); color: var(--text); border: 1px solid var(--line);
     box-shadow: 0 2px 8px rgba(0,0,0,.12);
   }
   .badge.done { background: rgba(47,109,246,.95); color: #ffffff; border-color: transparent; }
   .badge.watched { background: rgba(23,184,119,.95); color: #ffffff; border-color: transparent; }
-  .card-body { padding: 14px; }
-  .card-body .name { font-weight: 600; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .card-body .sub { color: var(--muted); font-size: 12.5px; margin: 4px 0 12px; }
-  .bar { height: 7px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+  .card-body { padding: 9px 10px 11px; }
+  .card-body .name { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-body .sub { color: var(--muted); font-size: 11px; margin: 3px 0 8px; }
+  .bar { height: 5px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
   .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 3px; transition: width .5s ease; }
   .bar.full > i { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
-  .prog-txt { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; color: var(--muted); }
+  .prog-txt { display: flex; justify-content: space-between; font-size: 10.5px; margin-top: 6px; color: var(--muted); }
   .prog-txt b { color: var(--text); font-weight: 600; }
 
   /* Movie card — no progress bar, just a simple status line */
@@ -316,13 +316,11 @@
     .add-btn { padding: 9px 12px; font-size: 13px; }
     .modal-overlay { padding: 6vh 14px 14px; }
     .show-head .poster-lg { width: 130px; margin: 0 auto; }
-    .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-    .card-body { padding: 9px 10px 11px; }
-    .card-body .name { font-size: 13px; }
-    .card-body .sub { font-size: 10.5px; margin: 3px 0 8px; }
-    .bar { height: 5px; }
-    .prog-txt { font-size: 10.5px; margin-top: 6px; }
-    .badge { font-size: 10px; padding: 3px 7px; }
+    .grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .card-body { padding: 7px 8px 9px; }
+    .card-body .name { font-size: 11.5px; }
+    .card-body .sub { font-size: 10px; margin: 2px 0 6px; }
+    .badge { font-size: 9px; padding: 2px 5px; top: 5px; right: 5px; }
   }
 </style>
 </head>
