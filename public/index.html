@@ -474,6 +474,7 @@ function showPage(id) {
 let activeTab = "tv";
 function switchTab(tab) {
   activeTab = tab;
+  location.hash = tab;
   document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
   $("#addBtnLabel").textContent = tab === "tv" ? "Add a show" : "Add a movie";
   if (tab === "tv") {
@@ -945,7 +946,7 @@ function openMovieDetail(id) {
   renderMovieDetail();
 }
 
-function closeMovieDetail() { currentMovie = null; showPage("moviesHome"); }
+function closeMovieDetail() { currentMovie = null; renderMovies(); showPage("moviesHome"); }
 
 function renderMovieDetail() {
   const m = currentMovie;
@@ -1006,7 +1007,11 @@ async function removeCurrentMovie() {
 // ---------- Init ----------
 initTvLibraryControls();
 initMovieLibraryControls();
-loadTvLibrary();
+if (location.hash === "#movies") {
+  switchTab("movies");
+} else {
+  loadTvLibrary();
+}
 </script>
 </body>
 </html>
